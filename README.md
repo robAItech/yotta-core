@@ -56,10 +56,20 @@ cp .env.example .env
 
 ```
 yotta-core/
-├── src/serve.mjs         # Express backend + PGLite + API
-├── admin/                # React frontend (built)
+├── src/serve.mjs           # Express backend + PGLite + API
+├── admin/                  # React frontend (built)
 │   ├── index.html
 │   └── assets/
+├── agents/                 # 🤖 AI agenti za poslovne funkcije
+│   ├── orchestrator/       # Glavni usmerjevalnik
+│   ├── ceo/                # 👑 CEO odločitve in KPI
+│   ├── tech/               # ⚙️ Tehnični nadzor
+│   ├── nabava/             # 📦 Naročila in dobavitelji
+│   ├── skladisce/          # 🏭 Zaloge in gibanja
+│   ├── racunovodstvo/      # 📒 Knjiženja in bilanca
+│   ├── projekti/           # 📋 Projektni kanban
+│   ├── dizajn/             # 🎨 Dizajn naloge
+│   └── shared/             # Skupna orodja (api-client)
 ├── package.json
 ├── start.sh
 ├── .env.example
