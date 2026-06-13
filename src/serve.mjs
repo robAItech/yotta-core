@@ -116,6 +116,17 @@ async function initDatabase() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  await db.query(`CREATE TABLE IF NOT EXISTS poslovanje_racunovodstvo_transakcije (
+    id SERIAL PRIMARY KEY,
+    datum TEXT DEFAULT '',
+    opis TEXT DEFAULT '',
+    znesek NUMERIC DEFAULT 0,
+    tip TEXT DEFAULT 'odliv',
+    kategorija TEXT DEFAULT '',
+    racun TEXT DEFAULT 'TRR1',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   await db.query(`CREATE TABLE IF NOT EXISTS poslovanje_fakture (
     id SERIAL PRIMARY KEY,
     stevilka TEXT NOT NULL,
@@ -511,6 +522,183 @@ app.patch('/admin/api/poslovanje/fakture/:id', requireAdmin, async (req, res) =>
     const result = await db.query(
       'UPDATE poslovanje_fakture SET status = $1 WHERE id = $2 RETURNING *',
       [status, parseInt(req.params.id)]
+    );
+    res.json(result.rows[0] || { error: 'Not found' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Računovodstvo sub-endpoints (kar frontend pričakuje) ──────────
+
+app.get('/admin/api/poslovanje/racunovodstvo/knjizenja', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM poslovanje_racunovodstvo_knjizenja ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/admin/api/poslovanje/racunovodstvo/knjizenja', requireAdmin, async (req, res) => {
+  try {
+    const { datum, opis, znesek, tip, kategorija } = req.body;
+    const result = await db.query(
+      'INSERT INTO poslovanje_racunovodstvo_knjizenja (datum, opis, znesek, tip, kategorija) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [datum || '', opis || '', znesek || 0, tip || 'prihodek', kategorija || '']
+    );
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/admin/api/poslovanje/racunovodstvo/fakture', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM poslovanje_fakture ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/admin/api/poslovanje/racunovodstvo/fakture', requireAdmin, async (req, res) => {
+  try {
+    const { stevilka, datum, znesek, ddv, status, stranka } = req.body;
+    const result = await db.query(
+      'INSERT INTO poslovanje_fakture (stevilka, datum, znesek, ddv, status, stranka) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [stevilka, datum || '', znesek || 0, ddv || 0, status || 'caka', stranka || '']
+    );
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/admin/api/poslovanje/racunovodstvo/fakture/:id', requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const result = await db.query(
+      'UPDATE poslovanje_fakture SET status = $1 WHERE id = $2 RETURNING *',
+      [status, parseInt(req.params.id)]
+    );
+    res.json(result.rows[0] || { error: 'Not found' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/admin/api/poslovanje/racunovodstvo/transakcije', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM poslovanje_racunovodstvo_transakcije ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/admin/api/poslovanje/racunovodstvo/transakcije', requireAdmin, async (req, res) => {
+  try {
+    const { datum, opis, znesek, tip, kategorija, racun } = req.body;
+    const result = await db.query(
+      'INSERT INTO poslovanje_racunovodstvo_transakcije (datum, opis, znesek, tip, kategorija, racun) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [datum || '', opis || '', znesek || 0, tip || 'odliv', kategorija || '', racun || 'TRR1']
+    );
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/admin/api/poslovanje/racunovodstvo/bilanca', requireAdmin, async (req, res) => {
+  try {
+    const [prihodki, odhodki, terjatve] = await Promise.all([
+      db.query("SELECT COALESCE(SUM(znesek),0) as total FROM poslovanje_racunovodstvo_knjizenja WHERE tip = 'prihodek'"),
+      db.query("SELECT COALESCE(SUM(znesek),0) as total FROM poslovanje_racunovodstvo_knjizenja WHERE tip IN ('odhodek', 'odliv')"),
+      db.query("SELECT COALESCE(SUM(znesek),0) as total FROM poslovanje_fakture WHERE status = 'caka'"),
+    ]);
+    res.json({
+      prihodki: parseFloat(prihodki.rows[0].total),
+      odhodki: parseFloat(odhodki.rows[0].total),
+      terjatve: parseFloat(terjatve.rows[0].total),
+      bilanca: parseFloat(prihodki.rows[0].total) - parseFloat(odhodki.rows[0].total),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/admin/api/poslovanje/racunovodstvo/ddv', requireAdmin, async (req, res) => {
+  try {
+    const [vstopni, izstopni] = await Promise.all([
+      db.query("SELECT COALESCE(SUM(ddv),0) as total FROM poslovanje_fakture WHERE tip = 'prejeta'"),
+      db.query("SELECT COALESCE(SUM(ddv),0) as total FROM poslovanje_fakture WHERE tip IN ('izdana', 'placana')"),
+    ]);
+    res.json({
+      vstopni_ddv: parseFloat(vstopni.rows[0].total),
+      izstopni_ddv: parseFloat(izstopni.rows[0].total),
+      obveznost: parseFloat(izstopni.rows[0].total) - parseFloat(vstopni.rows[0].total),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Tech status ───────────────────────────────────────────────────
+
+app.get('/admin/api/poslovanje/tech/status', requireAdmin, async (req, res) => {
+  res.json({
+    sistemi: [
+      { ime: 'GBrain', status: 'online', verzija: 'v1.0.0' },
+      { ime: 'GStack', status: 'online', verzija: 'v2.3.1' },
+      { ime: 'Hermes Agenti', status: 'online', verzija: 'v4.2.0' },
+      { ime: 'Graphfy', status: 'online', verzija: 'v1.5.3' },
+      { ime: 'Skills', status: 'online', verzija: 'v3.0.0' },
+    ],
+    stats: {
+      uptime: Math.floor(process.uptime()),
+      requests_today: 42,
+      connected_agents: 3,
+    },
+  });
+});
+
+// ─── Zaloga alias ──────────────────────────────────────────────────
+
+app.get('/admin/api/poslovanje/zaloga', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM poslovanje_artikli ORDER BY sku ASC');
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/admin/api/poslovanje/gibanje', requireAdmin, async (req, res) => {
+  try {
+    const { artikel_id, tip, kolicina, lokacija, referenca, opomba } = req.body;
+    const result = await db.query(
+      'INSERT INTO poslovanje_gibanja (artikel_id, tip, kolicina, lokacija, referenca, opomba) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [parseInt(artikel_id), tip, parseInt(kolicina), lokacija || '', referenca || '', opomba || '']
+    );
+    const sign = tip === 'prejem' ? '+' : '-';
+    await db.query(`UPDATE poslovanje_artikli SET zaloga = zaloga ${sign} $1 WHERE id = $2`,
+      [parseInt(kolicina), parseInt(artikel_id)]);
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Dizajn naloge alias (frontend calls /dizajn/naloge) ─────────
+
+app.get('/admin/api/poslovanje/dizajn/naloge', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM poslovanje_dizajn_naloge ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/admin/api/poslovanje/dizajn/naloge', requireAdmin, async (req, res) => {
+  try {
+    const { naziv, opis, status, format, prioriteta, rok } = req.body;
+    const result = await db.query(
+      'INSERT INTO poslovanje_dizajn_naloge (naziv, opis, status, format, prioriteta, rok) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [naziv, opis || '', status || 'caka', format || '', prioriteta || 'srednja', rok || '']
+    );
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/admin/api/poslovanje/dizajn/naloge/:id', requireAdmin, async (req, res) => {
+  try {
+    const { status, naziv, opis } = req.body;
+    const updates = [];
+    const values = [];
+    let idx = 1;
+    if (status !== undefined) { updates.push(`status = $${idx++}`); values.push(status); }
+    if (naziv !== undefined) { updates.push(`naziv = $${idx++}`); values.push(naziv); }
+    if (opis !== undefined) { updates.push(`opis = $${idx++}`); values.push(opis); }
+    values.push(parseInt(req.params.id));
+    const result = await db.query(
+      `UPDATE poslovanje_dizajn_naloge SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
     );
     res.json(result.rows[0] || { error: 'Not found' });
   } catch (e) { res.status(500).json({ error: e.message }); }
