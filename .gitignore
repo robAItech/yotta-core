@@ -4,3 +4,4 @@ admin/node_modules/
 *.log
 .DS_Store
 data/
+yotta-core.db/

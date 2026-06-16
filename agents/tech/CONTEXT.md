@@ -11,7 +11,7 @@
 │  serve.mjs (port 3100)          │
 ├──────────────────────────────────┤
 │         PGLite DATABASE           │
-│  In-memory PostgreSQL W/ seed    │
+│  File-based PostgreSQL W/ seed    │
 ├──────────────────────────────────┤
 │         OS / INFRA                │
 │  Node.js (Bun) - WSL/Linux       │

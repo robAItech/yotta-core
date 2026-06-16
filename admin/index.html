@@ -9,6 +9,29 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <script type="module" crossorigin src="/admin/assets/index-DdZSa851.js"></script>
   <link rel="stylesheet" crossorigin href="/admin/assets/index-DTNvP04O.css">
+  <!-- Yotta Core Integracije — Faza 3 -->
+  <script>
+  // Počakaj, da se SPA naloži, nato dodaj gumb za integracije v navigacijo
+  document.addEventListener('DOMContentLoaded', function() {
+    const observer = new MutationObserver(function() {
+      const sidebar = document.querySelector('nav, .sidebar, [class*="nav"], [class*="sidebar"], [class*="menu"]');
+      if (sidebar) {
+        observer.disconnect();
+        const link = document.createElement('a');
+        link.href = '/admin/integration';
+        link.className = sidebar.querySelector('a')?.className || 'nav-link';
+        link.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 16px;color:#e0e0e0;text-decoration:none;font-size:14px;border-radius:8px;margin:4px 8px;transition:all .2s;';
+        link.innerHTML = '🔌 Integracije <span style="font-size:10px;background:#1d4ed8;padding:2px 6px;border-radius:10px;color:#fff;">F3</span>';
+        link.onmouseenter = function() { this.style.background = '#2a2a3a'; };
+        link.onmouseleave = function() { this.style.background = 'transparent'; };
+        sidebar.appendChild(link);
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    // Timeout: če se sidebar ne pojavi v 10s, nehaj iskati
+    setTimeout(function() { observer.disconnect(); }, 10000);
+  });
+  </script>
 </head>
 <body>
   <div id="root"></div>
